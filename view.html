@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<!-- viewer.html — single catalogue page viewer (template rendered by renderViewer_() in Code.gs). -->
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<script src="bj-app.js?v=v2026.11.13-0815"></script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title></title>
+<!-- color-scheme: this page manages its own light/dark. Without it,
+     Android Chrome's auto-dark treats the page as light-only and
+     force-darkens it, ignoring the toggle. Same fix as index.html. -->
+<meta name="color-scheme" content="light dark">
+<script>
+  // Theme, set in <head> before first paint so there's no light flash.
+  // Dark is the default; only a stored 'light' opts out. Same 'bjTheme'
+  // localStorage key as index.html.
+  (function () {
+    try {
+      if (localStorage.getItem('bjTheme') !== 'light') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Same faces as index.html: Sarabun for all Thai; Orbitron (display) and
+     Share Tech Mono (readouts) only on English/numeric text, since neither
+     has Thai glyphs. Mixed strings are fine: fallback is per-character. -->
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&family=Orbitron:wght@500;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  /* ================================================================
+     SCI-FI TERMINAL palette — ONE accent, driven by the zodiac year
+     ================================================================
+     Ported from index.html. applyZodiacAccent() stamps
+     data-element="wood|fire|earth|metal|water" on <html>; the
+     html[data-element] blocks below map it to the accent, so each year
+     re-colours automatically.
+
+     Per element per theme:
+       --acc      bright accent: outlines, brackets, glow, grid
+       --acc2     secondary accent: gradients, the clock readout
+       --acc-ink  readable-as-text version on this theme's surfaces
+     plus --acc-hi, the dark-theme-brightness accent for the topbar (dark in
+     BOTH themes). Only light element blocks declare it; dark inherits. */
+  :root{
+    --acc:#c8480c;
+    --acc2:#a4530a;
+    --acc-ink:#9a3708;
+    --acc-hi:#ff7a1f;
+
+    /* Light theme surfaces */
+    --vbg:#e9eef4;
+    --vsurface:#ffffff;
+    --vink:#0f1822;
+    --vink-soft:#55677a;
+    --vshadow:0 6px 20px rgba(15,25,40,.10);
+
+    /* Topbar base: dark in both themes, matching index.html's banner.
+       #mobileMenuPanel.open reuses these two tokens. */
+    --vtopbar-start:#0c1422;
+    --vtopbar-end:#05080f;
+
+    /* --vaccent (stage glow, QR-link colour, status links) is an alias of
+       the one accent. */
+    --vaccent:var(--acc);
+
+    /* HUD chrome: frames, brackets, grid, glow. All accent-derived, which
+       is why one element palette re-skins the whole page. */
+    --hud-line:color-mix(in srgb, var(--acc) 60%, transparent);
+    --hud-line-strong:var(--acc);
+    --hud-glow:color-mix(in srgb, var(--acc) 20%, transparent);
+    --hud-grid:color-mix(in srgb, var(--acc) 15%, transparent);
+
+    /* Zodiac/clock chip accents resolve from the accent pair here;
+       applyZodiacAccent() must not set them inline. */
+    --zodiac-accent-light:var(--acc);
+    --zodiac-comp-light:var(--acc2);
+  }
+  html[data-theme="dark"]{
+    --acc:#ff7a1f;
+    --acc2:#ffc247;
+    --acc-ink:#ffb374;
+    --vbg:#04070c;
+    --vsurface:#0a1017;
+    --vink:#e6f1fb;
+    --vink-soft:#8aa2b8;
+    --vshadow:0 10px 30px rgba(0,0,0,.7);
+    --hud-line:color-mix(in srgb, var(--acc) 75%, transparent);
+    --hud-line-strong:var(--acc);
+    --hud-glow:color-mix(in srgb, var(--acc) 42%, transparent);
+    --hud-grid:color-mix(in srgb, var(--acc) 20%, transparent);
+    --zodiac-accent-dark:var(--acc);
+    --zodiac-comp-dark:var(--acc2);
+  }
+
+  /* Zodiac element accents, five elements x two themes. Every element needs
+     an explicit dark block: html[data-element] and html[data-theme] have
+     equal specificity, so only the combined selector reliably wins in dark. */
+  html[data-element="wood"] { --acc:#0f8b55; --acc2:#2f7d32; --acc-ink:#0b6a41; --acc-hi:#25f39a; }
+  html[data-element="fire"] { --acc:#c8480c; --acc2:#a4530a; --acc-ink:#9a3708; --acc-hi:#ff7a1f; }
+  html[data-element="earth"]{ --acc:#a8720c; --acc2:#8a5a0a; --acc-ink:#7a5209; --acc-hi:#ffc63d; }
+  html[data-element="metal"]{ --acc:#2a6b8f; --acc2:#4a7d99; --acc-ink:#1d5878; --acc-hi:#9fd8ff; }
+  html[data-element="water"]{ --acc:#0e7490; --acc2:#1d4ed8; --acc-ink:#0b5f76; --acc-hi:#22d3ee; }
+
+  html[data-theme="dark"][data-element="wood"] { --acc:#25f39a; --acc2:#9cff5a; --acc-ink:#5cffb5; }
+  html[data-theme="dark"][data-element="fire"] { --acc:#ff7a1f; --acc2:#ffc247; --acc-ink:#ffb374; }
+  html[data-theme="dark"][data-element="earth"]{ --acc:#ffc63d; --acc2:#e3a53a; --acc-ink:#ffd77a; }
+  html[data-theme="dark"][data-element="metal"]{ --acc:#9fd8ff; --acc2:#dbe9ff; --acc-ink:#c6e6ff; }
+  html[data-theme="dark"][data-element="water"]{ --acc:#22d3ee; --acc2:#5b8cff; --acc-ink:#7ee7f5; }
+
+  html, body{ margin:0; height:100%; overflow:hidden; }
+  * { box-sizing:border-box; }
+  body{
+    display:flex; flex-direction:column;
+    color:var(--vink);
+    font-family:'Sarabun','Segoe UI','Noto Sans Thai',system-ui,-apple-system,sans-serif;
+    /* Same backdrop as index.html: dot grid + soft accent glows. */
+    background-color:var(--vbg);
+    background-image:
+      radial-gradient(var(--hud-grid) 1.3px, transparent 1.3px),
+      radial-gradient(ellipse 1100px 820px at 12% 0%, color-mix(in srgb, var(--acc) 14%, transparent) 0%, transparent 62%),
+      radial-gradient(ellipse 950px 700px at 88% 100%, color-mix(in srgb, var(--acc2) 10%, transparent) 0%, transparent 58%);
+    background-size:26px 26px, auto, auto;
+    background-attachment:fixed;
+  }
+  html[data-theme="dark"] body{
+    background-image:
+      repeating-linear-gradient(0deg,
+        color-mix(in srgb, var(--acc) 5%, transparent) 0px,
+        color-mix(in srgb, var(--acc) 5%, transparent) 1px,
+        transparent 1px, transparent 4px),
+      radial-gradient(var(--hud-grid) 1.3px, transparent 1.3px),
+      radial-gradient(ellipse 1100px 820px at 12% 0%, color-mix(in srgb, var(--acc) 20%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 950px 700px at 88% 100%, color-mix(in srgb, var(--acc2) 14%, transparent) 0%, transparent 55%);
+    background-size:auto, 26px 26px, auto, auto;
+  }
+
+  /* ---------- Terminal typography ----------
+     Mono/display faces only on English/numeric text; Thai stays Sarabun. */
+  .topbtn .lbl .en, .viewbtn .lbl-sm .en, .titleAndNav .en, .status .en,
+  .stack-loading .ldtxt .en, .guide-legend h3 .en, .guide-legend li .en{
+    font-family:'Share Tech Mono', Consolas, monospace;
+    letter-spacing:.05em; text-transform:uppercase;
+  }
+  .navindicator, .zodiac-clock-badge .zb-date, .zodiac-clock-badge .zb-time{
+    font-family:'Share Tech Mono', Consolas, monospace;
+  }
+  .titleAndNav .th, .navbtn{
+    font-family:'Orbitron','Sarabun','Segoe UI','Noto Sans Thai',system-ui,sans-serif;
+  }
+
+  /* Topbar: 3-column grid so the title + prev/next stays truly centred
+     however many buttons sit on each side (flex centring drifts when the
+     sides differ). Dark instrument header with accent bloom and dot grid. */
+  .topbar{
+    min-height:54px;
+    background-color:var(--vtopbar-end);
+    background-image:
+      radial-gradient(color-mix(in srgb, var(--acc-hi) 15%, transparent) 1.2px, transparent 1.2px),
+      radial-gradient(ellipse 900px 300px at 4% 0%, color-mix(in srgb, var(--acc-hi) 26%, transparent) 0%, transparent 70%),
+      radial-gradient(ellipse 700px 260px at 96% 100%, color-mix(in srgb, var(--acc2) 20%, transparent) 0%, transparent 66%),
+      linear-gradient(160deg, var(--vtopbar-start) 0%, var(--vtopbar-end) 60%, var(--vtopbar-start) 100%);
+    background-size:22px 22px, auto, auto, auto;
+    border-bottom:1px solid var(--acc-hi);
+    box-shadow:0 8px 26px color-mix(in srgb, var(--acc-hi) 18%, transparent);
+    display:grid;
+    /* minmax(0,1fr), NOT plain 1fr: a bare 1fr track has a min-content
+       floor, so wide side content makes the "equal" columns unequal and
+       the title drifts off-centre. Overflow wraps instead (both sides
+       flex-wrap). Verified 500-1920px. */
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    color:#e9f2fb;
+    font-size:.85rem;
+  }
+  .topbar-left, .topbar-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .topbar-left{ justify-self:start; }
+  .topbar-right{ justify-self:end; }
+
+  /* .mid: linkZoneLeft | titleAndNav | linkZoneRight. QR-link zones flank
+     the title with a gap and grow outward. Same equal-outer-columns trick
+     as .topbar, nested, so the title stays centred on the whole screen even
+     with unequal link counts. */
+  .topbar .mid{
+    justify-self:center;
+    display:grid;
+    /* minmax(0,1fr) for the same reason as .topbar: lopsided link counts
+       would otherwise break the centring. */
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    align-items:center;
+    gap:18px;
+  }
+  .linkZone{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .linkZoneLeft{ justify-self:end; justify-content:flex-end; }
+  .linkZoneRight{ justify-self:start; justify-content:flex-start; }
+  .titleAndNav{ text-align:center; line-height:1.15; }
+  /* Thai primary, English secondary — the English line is a small mono
+     readout under it rather than near-equal weight beside it. */
+  .titleAndNav .th{ font-weight:700; letter-spacing:.01em; }
+  .titleAndNav .en{ font-size:.66rem; opacity:.7; display:block; margin-top:2px; }
+
+  /* Mobile/tablet compact mode: everything except title + prev/next
+     collapses into a ☰ menu (#menuToggleBtn/#mobileMenuPanel,
+     applyResponsiveLayout()) so the page image gets the height. These
+     selectors exist only here, so desktop is unaffected.
+     Two clauses (OR): narrow portrait, and landscape phones (short height).
+     The landscape clause also needs max-width:1024px: height alone caught a
+     real 1280x700 desktop; phones top out around 930px wide.
+     Keep in sync with COMPACT_MEDIA_QUERY in the JS. */
+  #menuToggleBtn{ display:none; }
+  #mobileMenuPanel{ display:none; }
+  @media (max-width:900px), (max-width:1024px) and (max-height:500px){
+    #menuToggleBtn{ display:inline-flex; }
+    /* Same equal-outer-columns grid: ☰ left, .mid centre, #homeBtn right,
+       so the title stays centred (a flex row shifted it by half the ☰). */
+    .topbar{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+      align-items:center;
+      gap:8px;
+    }
+    #menuToggleBtn{ justify-self:start; }
+    .topbar .mid{
+      display:block; justify-self:center; min-width:0;
+    }
+    /* Home stays visible top-right (most-used action) instead of in the
+       drawer: icon-only when closed, full label under body.menu-open
+       (openMobileMenu/closeMobileMenu). applyResponsiveLayout() moves it
+       here from #topbarLeft (moved, not cloned; reversible). */
+    #homeBtn{ justify-self:end; max-width:100%; }
+    #homeBtn .lbl{ display:none; }
+    /* Expanded: override .topbtn's nowrap so the label wraps and the
+       button grows taller, not wider; otherwise it overlaps the title. */
+    body.menu-open #homeBtn{
+      flex-wrap:wrap; max-width:150px; white-space:normal; text-align:center;
+    }
+    body.menu-open #homeBtn .lbl{
+      display:inline-block; white-space:normal;
+    }
+    /* The real topbar clusters and link zones are moved in by JS (not
+       cloned); lay them out as one flowing group, since their desktop
+       justify-self values mean nothing here. */
+    #mobileMenuPanel.open{
+      display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+      gap:8px; padding:0 10px 10px;
+      background:linear-gradient(160deg, var(--vtopbar-start), var(--vtopbar-end));
+      border-top:1px solid color-mix(in srgb, var(--acc-hi) 40%, transparent);
+    }
+    #mobileMenuPanel .topbar-left,
+    #mobileMenuPanel .topbar-right,
+    #mobileMenuPanel .linkZone{
+      justify-self:auto; justify-content:center;
+    }
+  }
+
+  /* Prev/Next flank the title: prevBtn | #titleCenter (title + page
+     indicator) | nextBtn. The arrows stay hidden via their own inline
+     display:none until the first page renders (initStack()/renderPdfPage());
+     the title is visible immediately from the server-rendered HTML. */
+  .titleAndNav{ display:flex; align-items:center; justify-content:center; gap:10px; }
+  .titleCenter{ display:flex; flex-direction:column; align-items:center; min-width:0; }
+  .navindicator{
+    font-size:.78rem; font-weight:700; min-width:44px; text-align:center;
+    color:var(--acc-hi); margin-top:3px; letter-spacing:.04em;
+  }
+
+  /* Shared look for every topbar button/link: accent hairline, 6px radius,
+     and a unified :focus-visible ring (Chrome styles <button> and <a> focus
+     rings differently by default). */
+  .topbtn, .viewbtn, .navbtn, .linkbtn, .theme-toggle-viewer{
+    border:1px solid color-mix(in srgb, var(--acc-hi) 55%, transparent);
+    border-radius:6px;
+    outline:none;
+    /* Fixed height, not min-height: .viewbtn content (~57px) outgrew a
+       48px floor, leaving button families mismatched. Shorter content
+       centres within the box. */
+    height:60px;
+    box-sizing:border-box;
+  }
+  .topbtn:focus-visible, .viewbtn:focus-visible, .navbtn:focus-visible, .linkbtn:focus-visible{
+    outline:2px solid var(--acc-hi); outline-offset:2px;
+  }
+  .topbtn:hover, .viewbtn:hover, .navbtn:hover, .linkbtn:hover{
+    box-shadow:0 0 16px color-mix(in srgb, var(--acc-hi) 30%, transparent);
+  }
+
+  /* New Search / Open in Drive (<a>, real navigation) and How to Use
+     (<button>) — same visual family as the .viewbtn controls. */
+  .topbtn{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(4,7,12,.5); color:#e9f2fb; text-decoration:none;
+    padding:8px 12px;
+    font-size:.76rem; font-weight:700; white-space:nowrap;
+    cursor:pointer; -webkit-appearance:none; appearance:none;
+    transition:background .15s ease, box-shadow .15s ease;
+  }
+  .topbtn:hover{ background:rgba(4,7,12,.72); }
+  .topbtn .icon{ font-size:1.15rem; line-height:1; }
+  .topbtn .lbl .en{ display:block; font-weight:400; opacity:.72; font-size:.58rem; margin-top:1px; }
+
+  /* QR-code link buttons: distributeLinkButtons() splits them across
+     #linkZoneLeft/#linkZoneRight. They reuse .viewbtn; .linkbtn is only a
+     marker class so JS can clear the dynamic link buttons without touching
+     Home/Drive/Rotate/Zoom/Print. */
+
+  /* Rotate/Zoom/Link buttons. text-decoration:none because link buttons
+     are <a> tags. */
+  .viewbtn{
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    background:rgba(4,7,12,.5); color:#e9f2fb; text-decoration:none; cursor:pointer;
+    padding:9px 16px;
+    font-size:1.3rem; font-weight:700;
+    transition:background .15s ease, box-shadow .15s ease;
+  }
+  .viewbtn:hover{ background:rgba(4,7,12,.72); }
+  .viewbtn .lbl-sm{ font-size:.6rem; font-weight:600; line-height:1.2; }
+  .viewbtn .lbl-sm .en{ display:block; opacity:.72; font-weight:400; }
+
+  /* Chinese zodiac badge: non-interactive .viewbtn look-alike whose border
+     is the zodiac accent (content from applyZodiacAccent()). Must come
+     after the shared rule above to override its border. */
+  .zodiac-badge{
+    cursor:default;
+    border-color:var(--acc-hi);
+    box-shadow:0 0 14px color-mix(in srgb, var(--acc-hi) 30%, transparent);
+    /* Three content rows overflow the shared fixed 60px height (a declared
+       height doesn't grow), so use a min-height floor instead. */
+    height:auto;
+    min-height:60px;
+  }
+  .zodiac-badge:hover{ background:rgba(4,7,12,.5); }
+
+  /* Date/time bubble, separate from the zodiac badge and coloured with
+     --acc2 so it reads as a distinct readout. Precedes the badge in the
+     markup, matching index.html. */
+  .zodiac-clock-badge{
+    cursor:default;
+    border-color:var(--acc2);
+    color:var(--acc2);
+    box-shadow:0 0 14px color-mix(in srgb, var(--acc2) 26%, transparent);
+    text-align:center;
+    /* Same min-height fix as .zodiac-badge: two rows overflow 60px. */
+    height:auto;
+    min-height:60px;
+  }
+  .zodiac-clock-badge:hover{ background:rgba(4,7,12,.5); }
+  .zodiac-clock-badge .zb-date{ font-size:.7rem; font-weight:700; }
+  .zodiac-clock-badge .zb-time{ font-size:.86rem; font-weight:800; letter-spacing:.4px; }
+
+  /* Prev/Next arrows: same family, sized by the shared fixed 60px height. */
+  .navbtn{
+    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:rgba(4,7,12,.5); color:#e9f2fb; cursor:pointer;
+    padding:9px 16px; font-size:1.3rem; font-weight:700;
+    transition:background .15s ease, box-shadow .15s ease;
+  }
+  .navbtn:hover{ background:rgba(4,7,12,.72); }
+  .navbtn:disabled{ opacity:.35; cursor:default; }
+  .navbtn:disabled:hover{ background:rgba(4,7,12,.5); box-shadow:none; }
+
+  .stage{
+    flex:1;
+    min-height:0;
+    overflow:auto;
+    display:flex;
+    justify-content:center;
+    padding:16px;
+    perspective:1600px; /* vanishing point for the page-flip animation below */
+  }
+  #pdfCanvas{
+    box-shadow:0 0 20px var(--hud-glow), var(--vshadow);
+    background:#fff; max-width:100%; height:auto; transition:transform .2s ease;
+    border:1px solid var(--hud-line);
+  }
+  #pageImage{
+    box-shadow:0 0 20px var(--hud-glow), var(--vshadow);
+    background:#fff; max-width:100%; max-height:100%; height:auto; object-fit:contain;
+    transition:transform .2s ease;
+    border:1px solid var(--hud-line);
+  }
+
+  /* Page-flip animation (PDF.js fallback only; image mode uses the page
+     stack below). The flip transform lives on a wrapper div because
+     #pageImage/#pdfCanvas already own `transform` for Rotate/Zoom
+     (applyViewTransform()). flipOutCurrentPage() adds .flip-exit on
+     prev/next to cover the load delay; renderPdfPage() starts the new
+     wrapper at .flip-enter and removes it next frame so it animates flat. */
+  .page-flip-wrap{
+    display:flex; justify-content:center;
+    transform-origin:center center;
+    backface-visibility:hidden;
+    transition:transform .4s cubic-bezier(.45,.05,.15,1), opacity .3s ease;
+  }
+  .page-flip-wrap.flip-enter{ transform:rotateY(78deg); opacity:0; }
+  .page-flip-wrap.flip-exit{ transform:rotateY(-78deg); opacity:0; }
+
+  /* Multi-page preload stack (image mode): current page centred at full
+     opacity, two fading tiers each side. The PDF.js path has no per-page
+     URL to preload, so it keeps the flip above.
+     The current page (.tier-0) stays an in-flow flex child, and only its
+     <img> gets id="pageImage", so Rotate/Zoom never touch a side page.
+     Side tiers are absolute, fanned with left% + scale only, and
+     pointer-events:none. No rotateY/perspective: foreshortening made the
+     left and right tiers look asymmetric. */
+  .page-stack{
+    position:relative;
+    display:flex; justify-content:center;
+    /* align-items must stay default (stretch): it gives tier-0 a definite
+       height so #pageImage's max-height:100% resolves. flex-start breaks
+       that chain and the image renders at full natural size, overflowing
+       the stage. */
+    width:100%;
+  }
+  .stack-page{
+    position:absolute; top:0; height:100%;
+    /* height:100% gives absolute side tiers the same definite stage-height
+       box tier-0 gets from stretch. Without it .stack-img's max-height:100%
+       has no effect, the image renders full-size, and scale() around its
+       centre displaces side tiles vertically (asymmetrically). */
+    pointer-events:none;
+    transition:left .45s cubic-bezier(.5,.05,.15,1), transform .45s cubic-bezier(.5,.05,.15,1), opacity .4s ease;
+  }
+  .stack-page.tier-0{
+    position:relative; top:auto; left:auto; transform:none;
+    pointer-events:auto;
+    z-index:5;
+  }
+  .stack-img{
+    display:block;
+    background:#fff;
+    border:1px solid var(--hud-line);
+    box-shadow:0 0 20px var(--hud-glow), var(--vshadow);
+    max-width:100%; max-height:100%; height:auto; object-fit:contain;
+    transition:transform .2s ease;
+  }
+  /* HUD corner brackets on the current page, as on index.html's panels:
+     four gradients per pseudo-element (::before top pair, ::after bottom
+     pair). tier-0 only. */
+  .stack-page.tier-0::before, .stack-page.tier-0::after{
+    content:''; position:absolute; inset:-6px; z-index:6;
+    pointer-events:none; background-repeat:no-repeat;
+    background-image:
+      linear-gradient(var(--hud-line-strong), var(--hud-line-strong)),
+      linear-gradient(var(--hud-line-strong), var(--hud-line-strong)),
+      linear-gradient(var(--hud-line-strong), var(--hud-line-strong)),
+      linear-gradient(var(--hud-line-strong), var(--hud-line-strong));
+    background-size:18px 2px, 2px 18px, 18px 2px, 2px 18px;
+    filter:drop-shadow(0 0 4px var(--hud-glow));
+  }
+  .stack-page.tier-0::before{ background-position:left top, left top, right top, right top; }
+  .stack-page.tier-0::after{ background-position:left bottom, left bottom, right bottom, right bottom; }
+
+  /* Loading placeholder for any tier still in flight: larger on the centre
+     page, compact on side tiers. Styled as a page-shaped card (surface
+     colour, hairline, same glow as .stack-img) so a loading tile looks like
+     an unpainted page rather than a dark hole. */
+  .stack-loading{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; min-width:120px; min-height:160px; padding:24px;
+    color:var(--vink); text-align:center; font-size:.78rem; line-height:1.5;
+    background:var(--vsurface);
+    border:1px solid var(--hud-line);
+    border-radius:4px;
+    box-shadow:0 0 20px var(--hud-glow), var(--vshadow);
+  }
+  .stack-page.tier-0 .stack-loading{ min-width:220px; min-height:280px; font-size:.9rem; padding:40px; }
+  .stack-loading .spin{
+    width:26px; height:26px; border-radius:50%;
+    border:3px solid color-mix(in srgb, var(--acc) 18%, transparent);
+    border-top-color:var(--hud-line-strong);
+    animation:stackspin .8s linear infinite;
+  }
+  .stack-loading .ldtxt .en{ display:block; opacity:.7; font-size:.85em; margin-top:2px; }
+  .stack-loading.err .spin{ display:none; }
+  .stack-loading a{ color:var(--acc-ink); font-weight:700; }
+  @keyframes stackspin{ to{ transform:rotate(360deg); } }
+
+  .status{
+    color:var(--vink); text-align:center; padding:60px 20px; font-size:.92rem;
+    line-height:1.6;
+  }
+  .status a{ color:var(--acc-ink); font-weight:700; }
+  .status .en{ display:block; opacity:.7; font-size:.76rem; margin-top:4px; }
+
+  /* Print A4: hide chrome and print the staged page flat at full width,
+     ignoring on-screen rotate/zoom. */
+  @media print{
+    .topbar{ display:none !important; }
+    html, body{ background:#fff !important; height:auto !important; overflow:visible !important; }
+    .stage{ padding:0 !important; overflow:visible !important; height:auto !important; display:block !important; }
+    /* Only the current page prints; preload side tiers are screen-only. */
+    .page-stack{ display:block !important; width:auto !important; }
+    .stack-page:not(.tier-0){ display:none !important; }
+    /* The HUD corner brackets are screen decoration too. */
+    .stack-page.tier-0::before, .stack-page.tier-0::after{ display:none !important; }
+    #pageImage, #pdfCanvas, .stack-img{
+      transform:none !important;
+      box-shadow:none !important; border:none !important;
+      width:100% !important; height:auto !important; max-width:100% !important; max-height:none !important;
+    }
+    @page{ size:A4; margin:10mm; }
+  }
+
+  /* "How to Use" guide overlay (❓ button): highlights each visible topbar
+     control with a callout, then fades out after 3 seconds. */
+  .guide-overlay{
+    position:fixed; inset:0; z-index:999;
+    background:rgba(2,4,8,.66);
+    opacity:0; pointer-events:none;
+    transition:opacity .4s ease;
+    display:none;
+    cursor:pointer;
+  }
+  .guide-overlay.visible{ opacity:1; pointer-events:auto; }
+  .guide-box{
+    position:absolute; border:2px solid var(--acc-hi); border-radius:4px;
+    background:color-mix(in srgb, var(--acc-hi) 12%, transparent);
+    box-shadow:0 0 14px color-mix(in srgb, var(--acc-hi) 35%, transparent);
+    pointer-events:none;
+  }
+  /* Numbered badges matched to the .guide-legend list, which avoids
+     overlapping captions when controls sit close together. */
+  .guide-badge{
+    position:absolute; width:20px; height:20px; border-radius:50%;
+    background:var(--acc-hi); color:#04070c; font-weight:800; font-size:.68rem;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.5);
+    transform:translate(-50%,-50%);
+    font-family:'Share Tech Mono', Consolas, monospace;
+    pointer-events:none;
+  }
+  .guide-legend{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    background:var(--vsurface); color:var(--vink);
+    border:1px solid var(--hud-line); border-radius:4px;
+    padding:16px 20px;
+    max-width:340px; width:88%; max-height:72vh; overflow:auto;
+    box-shadow:0 0 30px var(--hud-glow), var(--vshadow);
+    pointer-events:auto;
+  }
+  .guide-legend h3{ margin:0 0 10px; font-size:.92rem; }
+  .guide-legend h3 .en{ display:block; font-weight:400; opacity:.65; font-size:.64rem; margin-top:3px; }
+  .guide-legend ol{ margin:0; padding:0; list-style:none; }
+  .guide-legend li{ margin-bottom:9px; font-size:.76rem; line-height:1.4; }
+  .guide-legend li b{ display:inline-block; width:20px; color:var(--acc-ink); }
+  .guide-legend li .en{ display:block; opacity:.65; font-weight:400; font-size:.62rem; margin-left:20px; }
+
+  /* ================================================================
+     POLISH LAYER (2026-09-29)
+     ================================================================ */
+  /* Keyboard focus ring (mouse/touch clicks don't show it). */
+  a:focus-visible, button:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--acc-hi); outline-offset:2px;
+  }
+  /* Compact top bar between the phone menu (<=900px) and very wide
+     screens. With every button showing its English sub-label the two side
+     clusters wrapped onto two or three rows here, making the header 150-210px
+     tall on a normal laptop and pushing the page down. Titles stay in each
+     button's tooltip; the zodiac chip keeps only its icon. */
+  @media screen and (min-width:1025px) and (max-width:1799px),
+         screen and (min-width:901px) and (max-width:1024px) and (min-height:501px){
+    .topbtn .lbl .en, .viewbtn .lbl-sm .en{ display:none; }
+    .topbtn{ padding:8px 10px; }
+    .viewbtn{ padding:7px 11px; }
+    .zodiac-badge .lbl-sm{ display:none; }
+    .zodiac-badge{ min-height:0; }
+  }
+  /* Narrow laptops/tablets: icons only (tooltips carry the labels). */
+  @media screen and (min-width:901px) and (max-width:1199px){
+    .topbtn .lbl, .viewbtn .lbl-sm{ display:none; }
+    .viewbtn{ padding:9px 11px; }
+  }
+  @media screen and (min-width:901px) and (max-width:1099px){
+    .zodiac-clock-badge{ display:none; }
+  }
+  /* 📋 Models on this page (StockModels.gs): floating button + side panel
+     (bottom sheet on phones). Details in #smPop: hover = mouse, click/tap
+     pins it, any click or scroll closes it. Screen only. */
+  #pmToggle{
+    position:fixed; right:16px; bottom:16px; z-index:900; display:none;
+    border:1px solid var(--acc); border-radius:999px; padding:9px 15px; cursor:pointer;
+    background:var(--vsurface); color:var(--vink); font:inherit; font-size:.85rem; font-weight:700;
+    box-shadow:var(--vshadow), 0 0 0 3px color-mix(in srgb, var(--acc) 14%, transparent);
+  }
+  #pmToggle b{ color:var(--acc-ink); }
+  #pmToggle .en{ display:block; font-size:.66rem; font-weight:500; opacity:.75; }
+  #pmToggle.has{ display:block; }
+  #pmPanel{
+    position:fixed; right:16px; top:70px; bottom:76px; width:320px; z-index:901; display:none; flex-direction:column;
+    background:var(--vsurface); color:var(--vink); border:1px solid var(--acc); border-radius:14px;
+    box-shadow:var(--vshadow); overflow:hidden;
+  }
+  #pmPanel.open{ display:flex; }
+  #pmPanel .pmp-head{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid color-mix(in srgb, var(--acc) 30%, transparent); font-weight:700; font-size:.88rem; }
+  #pmPanel .pmp-head .en{ display:block; font-size:.68rem; font-weight:500; opacity:.7; }
+  #pmPanel .pmp-close{ margin-left:auto; border:none; background:transparent; color:var(--vink); font-size:1.2rem; cursor:pointer; padding:2px 6px; border-radius:8px; }
+  #pmPanel .pmp-close:hover{ background:color-mix(in srgb, var(--acc) 15%, transparent); }
+  #pmPanel .pmp-list{ overflow-y:auto; padding:6px 8px 10px; display:flex; flex-direction:column; gap:2px; }
+  .pm-row{
+    all:unset; box-sizing:border-box; display:flex; align-items:baseline; gap:6px; width:100%; min-width:0;
+    padding:5px 7px; border-radius:8px; cursor:pointer; font-family:inherit;
+  }
+  .pm-row:hover, .pm-row:focus-visible, .pm-row.pm-open{ background:color-mix(in srgb, var(--acc) 14%, transparent); outline:none; }
+  .pm-model{ font-family:Consolas,monospace; font-size:.8rem; font-weight:700; color:var(--acc-ink); white-space:nowrap; flex-shrink:0; max-width:55%; overflow:hidden; text-overflow:ellipsis; }
+  .pm-brand{ flex-shrink:0; font-size:.6rem; font-weight:700; padding:1px 6px; border-radius:999px; background:#1a1414; color:#fff; letter-spacing:.03em; }
+  .pm-name{ font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+  #smPop{
+    position:fixed; z-index:10050; left:0; top:0; visibility:hidden; opacity:0; pointer-events:none;
+    width:min(320px, calc(100vw - 16px)); box-sizing:border-box;
+    background:var(--vsurface); color:var(--vink); border:1px solid var(--acc); border-radius:12px;
+    box-shadow:var(--vshadow), 0 0 0 3px color-mix(in srgb, var(--acc) 14%, transparent);
+    padding:11px 13px; font-size:.84rem; line-height:1.45;
+    transform:translateY(4px); transition:opacity .12s ease, transform .12s ease;
+  }
+  #smPop.on{ visibility:visible; opacity:1; transform:none; pointer-events:auto; }
+  #smPop .sp-top{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:3px; }
+  #smPop .sp-model{ font-family:Consolas,monospace; font-weight:800; font-size:1rem; color:var(--acc-ink); word-break:break-all; }
+  #smPop .sp-th{ font-weight:700; }
+  #smPop .sp-en{ color:var(--vink-soft); font-size:.78rem; }
+  #smPop .sp-spec{ margin:7px 0 0; padding:0 0 0 16px; }
+  #smPop .sp-spec li{ margin:1px 0; overflow-wrap:anywhere; }
+  #smPop .sp-none{ margin-top:6px; color:var(--vink-soft); font-size:.76rem; }
+  #smPop .sp-page{ margin-top:6px; font-size:.72rem; color:var(--vink-soft); font-family:Consolas,monospace; }
+  #smPop .sp-hint{ margin-top:7px; padding-top:6px; border-top:1px solid color-mix(in srgb, var(--acc) 30%, transparent); font-size:.68rem; color:var(--vink-soft); }
+  #smPop .en{ opacity:.8; margin-left:4px; }
+  @media (max-width:700px){
+    #pmPanel{ left:8px; right:8px; top:auto; bottom:8px; width:auto; max-height:55vh; }
+    #pmToggle{ right:12px; bottom:12px; }
+  }
+  @media print{ #pmToggle, #pmPanel, #smPop{ display:none !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <!-- Mobile/tablet menu toggle: hidden on desktop, shown only by the
+         compact-mode media query. Opens #mobileMenuPanel, into which
+         applyResponsiveLayout() moves the topbar clusters and link zones. -->
+    <button type="button" class="topbtn" id="menuToggleBtn" title="เมนู / Menu" aria-expanded="false" aria-controls="mobileMenuPanel">
+      <span class="icon">☰</span>
+    </button>
+    <div class="topbar-left" id="topbarLeft">
+      <!-- How to Use: leftmost; opens the guide overlay (showGuideOverlay()). -->
+      <button type="button" class="topbtn" id="helpBtn" title="วิธีใช้งาน / How to Use">
+        <span class="icon">❓</span>
+        <span class="lbl">วิธีใช้งาน<span class="en">How to Use</span></span>
+      </button>
+      <a class="topbtn" id="homeBtn" href="%%baseUrl%%" title="กลับสู่หน้าค้นหาข้อมูลแคตตาล็อค / Return to Catalogue Data Search">
+        <span class="icon">🏠</span>
+        <span class="lbl">กลับสู่หน้าค้นหา<span class="en">Return to Catalogue Data Search</span></span>
+      </a>
+      <a class="topbtn" id="driveBtn" href="%%driveUrl%%" target="_blank" title="เปิดไฟล์ PDF ใน Drive / Open PDF files in Drive">
+        <span class="icon">📖</span>
+        <span class="lbl">เปิดไฟล์ PDF ใน Drive<span class="en">Open PDF files in Drive</span></span>
+      </a>
+    </div>
+    <div class="mid" id="midBlock">
+      <!-- QR-code link zones, filled by distributeLinkButtons(). Kept apart
+           from the button clusters so links flank the title with a gap;
+           equal outer grid columns keep #titleAndNav centred (see .mid). -->
+      <div class="linkZone linkZoneLeft" id="linkZoneLeft"></div>
+      <!-- Prev/Next flank the title; each stays hidden via inline
+           display:none until the first page renders (initStack()/
+           renderPdfPage()). The title is already correct from the server. -->
+      <div class="titleAndNav" id="titleAndNav">
+        <button id="prevBtn" class="navbtn" style="display:none" title="ก่อนหน้า / Previous (← arrow key)">‹</button>
+        <div class="titleCenter" id="titleCenter">
+          <div class="titleGroup" id="titleGroup">
+            <div class="th" id="titleTh">หมวด <span data-bjv="section"></span> • หน้า <span data-bjv="printedPage"></span></div>
+            <div class="en" id="titleEn">Section <span data-bjv="section"></span> • Page <span data-bjv="printedPage"></span></div>
+          </div>
+          <span id="pageIndicator" class="navindicator">–</span>
+        </div>
+        <button id="nextBtn" class="navbtn" style="display:none" title="ถัดไป / Next (→ arrow key)">›</button>
+      </div>
+      <div class="linkZone linkZoneRight" id="linkZoneRight"></div>
+    </div>
+    <div class="topbar-right" id="topbarRight">
+      <button id="rotateBtn" class="viewbtn" title="หมุนภาพ / Rotate">
+        ↻
+        <span class="lbl-sm">หมุน<span class="en">Rotate</span></span>
+      </button>
+      <button id="zoomBtn" class="viewbtn" title="ซูม / Zoom">
+        🔍
+        <span class="lbl-sm">ซูม <span id="zoomLabel">100%</span><span class="en">Zoom</span></span>
+      </button>
+      <!-- Print A4: uses the @media print rules (flat, full width). -->
+      <button id="printBtn" class="viewbtn" title="พิมพ์ A4 / Print A4">
+        🖨️
+        <span class="lbl-sm">พิมพ์ A4<span class="en">Print A4</span></span>
+      </button>
+      <!-- Dark/light toggle. Shares the 'bjTheme' localStorage key with
+           index.html (same origin), so the choice carries over both ways. -->
+      <button id="themeToggleBtn" class="viewbtn" title="สลับโหมดมืด/สว่าง / Toggle dark mode">
+        <span class="theme-icon">🌙</span>
+        <span class="lbl-sm ttlabel">โหมดมืด<span class="en">Dark Theme</span></span>
+      </button>
+      <!-- Date/time bubble, then zodiac badge (same order as index.html).
+           Filled by applyZodiacAccent()/updateZodiacClock(). -->
+      <span id="zodiacClockBadge" class="viewbtn zodiac-clock-badge" title="วันที่/เวลาปัจจุบัน — Current date/time"></span>
+      <span id="zodiacBadge" class="viewbtn zodiac-badge" title="Self-adapting Chinese zodiac accent — changes automatically each year"></span>
+    </div>
+  </div>
+
+  <!-- Mobile/tablet dropdown menu, empty in the markup. In compact mode
+       applyResponsiveLayout() moves the REAL topbar clusters and link zones
+       here (not clones, so ids/handlers survive) and back on desktop.
+       Hidden until the ☰ button is tapped. -->
+  <div id="mobileMenuPanel"></div>
+
+  <div class="stage" id="stage">
+    <div class="page-stack" id="pageStack"></div>
+    <div class="status" id="status">
+      📦 กำลังดึงข้อมูลสินค้าจากคลัง...
+      <span class="en">Fetching the product page from the catalogue…</span>
+    </div>
+  </div>
+
+  <!-- "How to Use" overlay: built by showGuideOverlay(); auto-fades
+       after 3s, or click to dismiss. -->
+  <div class="guide-overlay" id="guideOverlay"></div>
+  <button type="button" id="pmToggle" title="รุ่นสินค้าในหน้านี้ / Models on this page">📋 <b id="pmCount">0</b> รุ่นในหน้านี้<span class="en">Models on this page</span></button>
+  <div id="pmPanel" role="dialog" aria-label="Models on this page">
+    <div class="pmp-head"><div>📋 รุ่นในหน้านี้ <span id="pmPanelCount"></span><span class="en">Models on this page · tap a model for details</span></div>
+      <button type="button" class="pmp-close" id="pmClose" title="ปิด / Close">✕</button></div>
+    <div class="pmp-list" id="pmList"></div>
+  </div>
+
+<script type="text/x-bj-viewer" id="bjViewerMain">
+// Guarded: if the PDF.js CDN is blocked or slow to fail, a bare reference
+// here would throw and stop every line below it (image viewer, nav, zoom).
+// The page image path doesn't need PDF.js at all; only the PDF fallback does.
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+const FILE_ID = __V.fileId;
+const TARGET_PAGE = __V.page; // RAW page — for PDF.js pdfDoc.getPage(N) only
+const DRIVE_URL = __V.driveUrl;
+const SECTION = __V.section;
+// Pre-rendered image for the initial page (Code.gs getCatalogueImageUrl_),
+// or null if not rendered yet, in which case the viewer uses the PDF.js path.
+const INITIAL_IMAGE_URL = __V.imageUrl;
+const MIN_PAGE = __V.minPage;
+const MAX_PAGE = __V.maxPage;
+// Initial page's QR links in reading order (top-left QR first). Refetched
+// per page via getQrLinksForPage() on client-side navigation.
+const INITIAL_QR_LINKS = __V.qrLinks;
+// Stock models printed on the initial page: [[model, brand, th, en, spec, pages], ...]
+// (Code.gs renderViewer_ / StockModels.gs). Refetched per page with getPageModels().
+const INITIAL_PAGE_MODELS = __V.pageModels;
+
+let pdfDoc = null;
+let currentPage = TARGET_PAGE;
+let imageMode = !!INITIAL_IMAGE_URL;
+
+// ---------------------------------------------------------------------
+// Rotate + zoom, for sideways-printed spec sheets and small print.
+// Applies to whichever element is on stage (#pageImage or #pdfCanvas).
+// Both reset on every page navigation.
+// ---------------------------------------------------------------------
+let rotation = 0; // 0, 90, 180, 270
+const ZOOM_LEVELS = [1, 1.5, 2, 2.5];
+let zoomIndex = 0;
+
+function applyViewTransform() {
+  const el = document.getElementById('pageImage') || document.getElementById('pdfCanvas');
+  const stage = document.getElementById('stage');
+  const zoomLabelEl = document.getElementById('zoomLabel');
+  if (!el || !stage) return;
+
+  const zoom = ZOOM_LEVELS[zoomIndex];
+  let fitScale = 1;
+  if (rotation === 90 || rotation === 270) {
+    // offsetWidth/Height are the untransformed layout size; the
+    // getBoundingClientRect() box is already rotated and would compound on
+    // repeated clicks.
+    const w = el.offsetWidth, h = el.offsetHeight;
+    if (w && h) {
+      fitScale = Math.min(
+        (stage.clientWidth - 32) / h,
+        (stage.clientHeight - 32) / w,
+        1
+      );
+    }
+  }
+  el.style.transform = 'rotate(' + rotation + 'deg) scale(' + (zoom * fitScale).toFixed(3) + ')';
+  // Unrotated zoom anchors at the TOP: a centre-anchored scale grows upward
+  // past scrollTop=0, which can't be scrolled to (the top gets cut off).
+  // Rotation stays centre-anchored: fitScale above assumes it, and a
+  // top-anchored 90/270 rotation swings the page off the stage.
+  el.style.transformOrigin = (rotation === 0) ? 'top center' : 'center center';
+  if (zoomLabelEl) zoomLabelEl.textContent = Math.round(zoom * 100) + '%';
+}
+
+function resetViewTransform() {
+  rotation = 0;
+  zoomIndex = 0;
+}
+
+// Converts a raw PDF-file page number into what's actually printed on
+// that page (Page - 2, same offset in every section). Raw pages 1/2 are
+// each section's cover/index and have no printed number, so prev/next
+// landing on them (e.g. from page 3) shows a label instead of a number.
+function printedLabelForRaw(num) {
+  if (num === 1) return 'ปก / Cover';
+  if (num === 2) return 'สารบัญ / Index';
+  return String(num - 2);
+}
+
+function showStatus(html) {
+  document.getElementById('stage').innerHTML = '<div class="status">' + html + '</div>';
+}
+
+// Updates the section/page title in place (Thai and English), since
+// prev/next navigates client-side without a reload.
+function updateTitle(printedLabel) {
+  document.getElementById('titleTh').textContent = 'หมวด ' + SECTION + ' • หน้า ' + printedLabel;
+  document.getElementById('titleEn').textContent = 'Section ' + SECTION + ' • Page ' + printedLabel;
+}
+
+// Rebuilds the numbered QR-link buttons for the current page: the left
+// zone gets ceil(n/2), the right zone the rest, so the numbers count
+// 1, 2, 3... left-to-right across the title. `links` is already in reading
+// order (top-left QR first); numbering follows array order.
+function distributeLinkButtons(links) {
+  const zoneLeft = document.getElementById('linkZoneLeft');
+  const zoneRight = document.getElementById('linkZoneRight');
+  if (!zoneLeft || !zoneRight) return;
+
+  // Clear the previous page's set; link counts vary per page.
+  zoneLeft.innerHTML = '';
+  zoneRight.innerHTML = '';
+
+  if (links && links.length) {
+    const leftCount = Math.ceil(links.length / 2);
+    const leftLinks = links.slice(0, leftCount);
+    const rightLinks = links.slice(leftCount);
+
+    leftLinks.forEach(function (url, i) {
+      zoneLeft.appendChild(makeLinkButton(url, i + 1));
+    });
+    rightLinks.forEach(function (url, i) {
+      zoneRight.appendChild(makeLinkButton(url, leftCount + i + 1));
+    });
+  }
+}
+
+// Builds one link button in the .viewbtn style (icon + small label).
+function makeLinkButton(url, num) {
+  const a = document.createElement('a');
+  a.className = 'viewbtn linkbtn';
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.setAttribute('data-link-num', num);
+  a.title = 'QR-link ' + num;
+  a.innerHTML = '🔗<span class="lbl-sm">QR-link ' + num + '</span>';
+  return a;
+}
+
+function updateQrLinks(links) {
+  distributeLinkButtons(links || []);
+}
+
+// Fetches the current page's QR links from the Sheet after client-side
+// navigation (the server-rendered value only covers the initial page).
+function refreshQrLinks(num) {
+  if (!SECTION) return;
+  google.script.run
+    .withSuccessHandler(updateQrLinks)
+    .withFailureHandler(function () { /* leave whatever was showing before */ })
+    .getQrLinksForPage(SECTION, num);
+}
+
+// ---------------------------------------------------------------------
+// 📋 Models on this page (stock list, model + spec only — never price/counts).
+// ---------------------------------------------------------------------
+const pageModelsCache = new Map();          // raw page -> list (initial page seeded from the server)
+let pageModelsFor = null;                    // raw page the panel currently shows
+const PM_OPEN_KEY = 'bjPmPanelOpen';
+
+function pmEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderPageModels(num, list) {
+  if (num !== currentPage) return;            // an older page's answer arrived late
+  pageModelsFor = num;
+  list = list || [];
+  const toggle = document.getElementById('pmToggle'), panel = document.getElementById('pmPanel');
+  document.getElementById('pmCount').textContent = list.length;
+  document.getElementById('pmPanelCount').textContent = '(' + list.length + ')';
+  document.getElementById('pmList').innerHTML = list.map(function (m) {
+    return '<button type="button" class="pm-row" data-m="' + pmEsc(m[0]) + '" data-b="' + pmEsc(m[1]) + '" data-th="' + pmEsc(m[2])
+      + '" data-en="' + pmEsc(m[3]) + '" data-s="' + pmEsc(m[4]) + '" data-p="' + pmEsc(m[5]) + '">'
+      + '<span class="pm-model">' + pmEsc(m[0]) + '</span>' + (m[1] ? '<span class="pm-brand">' + pmEsc(m[1]) + '</span>' : '')
+      + '<span class="pm-name">' + pmEsc(m[2] || m[3] || '') + '</span></button>';
+  }).join('');
+  SmPop.hide();
+  if (!list.length) { toggle.classList.remove('has'); panel.classList.remove('open'); return; }
+  let open = false;
+  try { open = localStorage.getItem(PM_OPEN_KEY) === '1'; } catch (e) { open = false; }
+  panel.classList.toggle('open', open);
+  toggle.classList.toggle('has', !open);
+}
+
+function refreshPageModels(num) {
+  if (!SECTION) return;
+  if (pageModelsCache.has(num)) { renderPageModels(num, pageModelsCache.get(num)); return; }
+  google.script.run
+    .withSuccessHandler(function (list) { pageModelsCache.set(num, list || []); renderPageModels(num, list || []); })
+    .withFailureHandler(function () { renderPageModels(num, []); })
+    .getPageModels(SECTION, num);
+}
+
+function setPageModelsOpen(open) {
+  try { localStorage.setItem(PM_OPEN_KEY, open ? '1' : '0'); } catch (e) { /* private mode: just not remembered */ }
+  document.getElementById('pmPanel').classList.toggle('open', open);
+  document.getElementById('pmToggle').classList.toggle('has', !open);
+  if (!open) SmPop.hide();
+}
+
+function initPageModels() {
+  document.getElementById('pmToggle').onclick = function () { setPageModelsOpen(true); };
+  document.getElementById('pmClose').onclick = function () { setPageModelsOpen(false); };
+  pageModelsCache.set(TARGET_PAGE, INITIAL_PAGE_MODELS || []);
+  renderPageModels(currentPage, pageModelsCache.get(currentPage) || []);
+}
+
+// One details pop-up for every .pm-row: hover (mouse) previews, click/tap pins,
+// any other click (the pop-up too) or any scroll closes it.
+const SmPop = (function () {
+  let pop = null, cur = null, pinned = false, shownTop = 0;
+  function box() {
+    if (!pop) { pop = document.createElement('div'); pop.id = 'smPop'; pop.setAttribute('role', 'dialog'); document.body.appendChild(pop); }
+    return pop;
+  }
+  function fill(btn) {
+    const d = btn.dataset;
+    const specs = String(d.s || '').split(' · ').filter(Boolean);
+    box().innerHTML =
+      '<div class="sp-top"><span class="sp-model">' + pmEsc(d.m) + '</span>' + (d.b ? '<span class="pm-brand">' + pmEsc(d.b) + '</span>' : '') + '</div>'
+      + (d.th ? '<div class="sp-th">' + pmEsc(d.th) + '</div>' : '')
+      + (d.en ? '<div class="sp-en">' + pmEsc(d.en) + '</div>' : '')
+      + (specs.length ? '<ul class="sp-spec">' + specs.map(function (x) { return '<li>' + pmEsc(x) + '</li>'; }).join('') + '</ul>'
+                      : '<div class="sp-none">ไม่มีสเปกเพิ่มเติม<span class="en">No extra spec</span></div>')
+      + (d.p ? '<div class="sp-page">PDF ' + pmEsc(d.p) + '</div>' : '')
+      + '<div class="sp-hint">' + (pinned ? 'แตะที่ใดก็ได้เพื่อปิด<span class="en">Tap anywhere to close</span>' : 'คลิกเพื่อปักไว้<span class="en">Click to keep it open</span>') + '</div>';
+  }
+  function place(btn) {
+    const p = box(), r = btn.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    p.style.left = '0px'; p.style.top = '0px';
+    const w = p.offsetWidth, h = p.offsetHeight;
+    // beside the side panel when there is room on its left, else above/below the row
+    let left = r.left - w - 10, top = Math.min(Math.max(8, r.top - 10), vh - h - 8);
+    if (left < 8) {
+      left = Math.min(Math.max(8, r.left), vw - w - 8);
+      top = r.bottom + 6;
+      if (top + h > vh - 8) top = r.top - h - 6;
+      if (top < 8) top = 8;
+    }
+    p.style.left = left + 'px'; p.style.top = top + 'px';
+  }
+  function show(btn, pin) {
+    if (cur && cur !== btn) cur.classList.remove('pm-open');
+    pinned = pin; cur = btn;
+    btn.classList.add('pm-open');
+    fill(btn); place(btn);
+    shownTop = btn.getBoundingClientRect().top;
+    box().classList.add('on');
+  }
+  function hide() {
+    if (pop) pop.classList.remove('on');
+    if (cur) cur.classList.remove('pm-open');
+    cur = null; pinned = false;
+  }
+  document.addEventListener('pointerover', function (ev) {
+    if (ev.pointerType !== 'mouse' || pinned || !ev.target.closest) return;
+    const b = ev.target.closest('.pm-row');
+    if (b && b !== cur) show(b, false);
+  });
+  document.addEventListener('pointerout', function (ev) {
+    if (ev.pointerType !== 'mouse' || pinned || !ev.target.closest) return;
+    const b = ev.target.closest('.pm-row');
+    if (b && b === cur && !(ev.relatedTarget && b.contains(ev.relatedTarget))) hide();
+  });
+  document.addEventListener('click', function (ev) {
+    const b = ev.target.closest ? ev.target.closest('.pm-row') : null;
+    if (b) {
+      ev.preventDefault();
+      if (pinned && cur === b) { hide(); return; }
+      show(b, true);
+      return;
+    }
+    if (cur) hide();
+  }, true);
+  // Close when the row has really scrolled away (> 30 px or off screen); tiny shifts (more cards / images
+  // loading, scroll anchoring) only move the pop-up along with its row.
+  window.addEventListener('scroll', function () {
+    if (!cur) return;
+    const r = cur.getBoundingClientRect();
+    if (!cur.isConnected || Math.abs(r.top - shownTop) > 30 || r.bottom < 0 || r.top > window.innerHeight) hide();
+    else place(cur);
+  }, { passive: true, capture: true });
+  window.addEventListener('resize', function () { if (cur) hide(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && cur) hide(); });
+  return { hide: hide };
+})();
+
+// ---------------------------------------------------------------------
+// "How to Use" guide overlay: highlights every currently visible topbar
+// control at its real on-screen position, then fades after 3 seconds.
+// Clicking the overlay dismisses it.
+// ---------------------------------------------------------------------
+const GUIDE_ITEMS = [
+  { id: 'helpBtn',    th: 'วิธีใช้งาน',                th_sub: 'กดปุ่มนี้เพื่อดูคำแนะนำนี้อีกครั้ง', en: 'Open this guide again anytime' },
+  { id: 'homeBtn',    th: 'กลับสู่หน้าค้นหา',           th_sub: '', en: 'Return to catalogue search' },
+  { id: 'driveBtn',   th: 'เปิดไฟล์ PDF ใน Drive',      th_sub: '', en: 'Open the original PDF in Drive' },
+  { id: 'titleGroup', th: 'หมวดและหน้าที่กำลังดู',      th_sub: '', en: 'Section & page you\'re viewing' },
+  { id: 'prevBtn',    th: 'ไปหน้าก่อนหน้า/ถัดไป',       th_sub: '', en: 'Go to the previous/next page' },
+  { id: 'rotateBtn',  th: 'หมุนภาพ',                    th_sub: '', en: 'Rotate the page image' },
+  { id: 'zoomBtn',    th: 'ซูมภาพ',                     th_sub: '', en: 'Zoom the page image' },
+  { id: 'printBtn',   th: 'พิมพ์ A4',                   th_sub: '', en: 'Print this page as A4' },
+  { id: 'themeToggleBtn', th: 'สลับโหมดมืด/สว่าง',      th_sub: '', en: 'Toggle dark/light theme' }
+];
+let _guideHideTimer = null;
+
+// Builds the ordered {el, th, en} guide targets for what's on screen now.
+// GUIDE_ITEMS covers the fixed controls; QR-link buttons vary per page, so
+// they're collected from the DOM in their laid-out (ascending) order.
+function collectGuideTargets() {
+  const targets = [];
+  GUIDE_ITEMS.forEach(function (item) {
+    const el = document.getElementById(item.id);
+    // Skip anything not visible (e.g. prev/next before the first render).
+    if (!el || el.offsetParent === null) return;
+    const thLine = item.th + (item.th_sub ? ' — ' + item.th_sub : '');
+    targets.push({ el: el, th: thLine, en: item.en });
+  });
+  document.querySelectorAll('.linkbtn').forEach(function (el) {
+    if (el.offsetParent === null) return;
+    const num = el.getAttribute('data-link-num') || '?';
+    targets.push({
+      el: el,
+      th: 'QR-link ' + num,
+      en: 'QR-link ' + num + ' — extra link from a QR code on this page'
+    });
+  });
+  return targets;
+}
+
+function showGuideOverlay() {
+  const overlay = document.getElementById('guideOverlay');
+  if (!overlay) return;
+  clearTimeout(_guideHideTimer);
+  overlay.innerHTML = '';
+
+  // Numbered badges + one central legend card, not per-control tooltips,
+  // which would overlap in the compact topbar.
+  const legendItems = [];
+  let n = 0;
+  collectGuideTargets().forEach(function (target) {
+    n++;
+    const rect = target.el.getBoundingClientRect();
+
+    const box = document.createElement('div');
+    box.className = 'guide-box';
+    box.style.top = (rect.top - 4) + 'px';
+    box.style.left = (rect.left - 4) + 'px';
+    box.style.width = (rect.width + 8) + 'px';
+    box.style.height = (rect.height + 8) + 'px';
+    overlay.appendChild(box);
+
+    const badge = document.createElement('div');
+    badge.className = 'guide-badge';
+    badge.textContent = n;
+    badge.style.top = (rect.top - 4) + 'px';
+    badge.style.left = (rect.left - 4) + 'px';
+    overlay.appendChild(badge);
+
+    legendItems.push(
+      '<li><b>' + n + '.</b>' + target.th + '<span class="en">' + target.en + '</span></li>'
+    );
+  });
+
+  const legend = document.createElement('div');
+  legend.className = 'guide-legend';
+  legend.innerHTML =
+    '<h3>คำแนะนำการใช้งาน<span class="en">How to Use — what\'s where</span></h3>' +
+    '<ol>' + legendItems.join('') + '</ol>';
+  // Hovering the legend pauses the auto-fade; leaving restarts the 3s timer.
+  legend.onmouseenter = function () { clearTimeout(_guideHideTimer); };
+  legend.onmouseleave = function () { _guideHideTimer = setTimeout(hideGuideOverlay, 3000); };
+  overlay.appendChild(legend);
+
+  overlay.style.display = 'block';
+  void overlay.offsetWidth; // force reflow so the opacity transition below actually animates
+  overlay.classList.add('visible');
+  _guideHideTimer = setTimeout(hideGuideOverlay, 3000);
+}
+
+function hideGuideOverlay() {
+  const overlay = document.getElementById('guideOverlay');
+  if (!overlay) return;
+  clearTimeout(_guideHideTimer);
+  overlay.classList.remove('visible');
+  setTimeout(function () {
+    overlay.style.display = 'none';
+    overlay.innerHTML = '';
+  }, 400); // matches the CSS opacity transition duration
+}
+
+// Page-flip helpers (PDF.js path); see the .page-flip-wrap CSS comment.
+function flipOutCurrentPage() {
+  const wrap = document.getElementById('pageFlipWrap');
+  if (wrap) wrap.classList.add('flip-exit');
+}
+
+// Called after renderPdfPage() inserts a fresh .flip-enter wrapper. The
+// forced reflow is required: without it the browser coalesces the add and
+// remove into one style recalc and nothing animates.
+function settlePageFlip() {
+  const wrap = document.getElementById('pageFlipWrap');
+  if (!wrap) return;
+  void wrap.offsetWidth;
+  requestAnimationFrame(function () { wrap.classList.remove('flip-enter'); });
+}
+
+function b64ToUint8(b64) {
+  const raw = atob(b64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// ---------------------------------------------------------------------
+// Image mode: fast path whenever a pre-rendered page image exists (direct
+// <img src>, no PDF.js or base64). Multi-page preload stack:
+//   - Current page first, then both near tiers, then both far tiers
+//     (priority waves in renderStack()).
+//   - Near tiers at 10% opacity, far tiers at 5% (STACK_POS).
+//   - Navigating slides/fades nodes between tiers via CSS transitions
+//     (goToStackPage()/renderStack()) rather than swapping content.
+//   - Only the tier-0 <img> gets id="pageImage", so Rotate/Zoom never
+//     affect a side page.
+//   - Tiers still in flight show a loading card (fillStackNodeContent()).
+// The PDF.js fallback keeps the page flip: it loads the whole document up
+// front and has no per-page URL to prefetch.
+// ---------------------------------------------------------------------
+
+const STACK_TIERS = [-2, -1, 0, 1, 2];
+// left% / scale / opacity / z-index per tier offset from the current page.
+// Tier 0 ignores left/scale (stays an in-flow flex child). Left and right
+// tiers are deliberately mirror-identical.
+const STACK_POS = {
+  '-2': { left: 6,  scale: .60, opacity: .05, z: 1 },
+  '-1': { left: 27, scale: .80, opacity: .10, z: 2 },
+  '0':  { left: 50, scale: 1,   opacity: 1,   z: 5 },
+  '1':  { left: 73, scale: .80, opacity: .10, z: 2 },
+  '2':  { left: 94, scale: .60, opacity: .05, z: 1 }
+};
+
+// pageNum -> { status:'loading'|'ready'|'error', url, promise? }
+const stackCache = new Map();
+// pageNum -> the .stack-page DOM node currently showing that page, for
+// every page within the current ±2 window.
+const stackNodes = new Map();
+
+function tierOf(num) { return num - currentPage; }
+
+function fetchPageUrl(num) {
+  return new Promise(function (resolve) {
+    google.script.run
+      .withSuccessHandler(function (url) { resolve(url || null); })
+      .withFailureHandler(function () { resolve(null); })
+      .getCatalogueImageUrl(SECTION, num);
+  });
+}
+
+// Returns a promise that resolves once `num` is ready or errored. Each call
+// fetches independently; renderStack() decides which calls overlap. Don't
+// chain all tiers on one serial queue: the right near tile then always
+// loads after the left and looks empty (a dark placeholder at 10% opacity
+// is nearly invisible in dark theme).
+function ensureStackPageLoaded(num) {
+  if (MIN_PAGE != null && num < MIN_PAGE) return Promise.resolve();
+  if (MAX_PAGE != null && num > MAX_PAGE) return Promise.resolve();
+  const cached = stackCache.get(num);
+  if (cached && cached.status === 'ready') return Promise.resolve();
+  if (cached && cached.status === 'loading' && cached.promise) return cached.promise;
+  const promise = fetchPageUrl(num).then(function (url) {
+    if (!url) {
+      stackCache.set(num, { status: 'error', url: null });
+      refreshStackNode(num);
+      return;
+    }
+    // A real Image() fetches and caches the bytes now, so the on-screen
+    // <img> paints instantly from cache on navigation.
+    return new Promise(function (resolve) {
+      const preloadImg = new Image();
+      preloadImg.onload = function () {
+        stackCache.set(num, { status: 'ready', url: url });
+        refreshStackNode(num);
+        resolve();
+      };
+      preloadImg.onerror = function () {
+        stackCache.set(num, { status: 'error', url: null });
+        refreshStackNode(num);
+        resolve();
+      };
+      preloadImg.src = url;
+    });
+  });
+  stackCache.set(num, { status: 'loading', url: null, promise: promise });
+  return promise;
+}
+
+function applyTierStyle(node, tier) {
+  const pos = STACK_POS[String(tier)];
+  if (!pos) return;
+  node.style.zIndex = pos.z;
+  node.style.opacity = pos.opacity;
+  if (tier === 0) {
+    node.style.left = '';
+    node.style.transform = '';
+  } else {
+    node.style.left = pos.left + '%';
+    node.style.transform = 'translate(-50%,0) scale(' + pos.scale + ')';
+  }
+  node.classList.toggle('tier-0', tier === 0);
+}
+
+function fillStackNodeContent(node, num, tier) {
+  const entry = stackCache.get(num);
+  if (!entry || entry.status === 'loading') {
+    node.innerHTML =
+      '<div class="stack-loading">' +
+        '<span class="spin"></span>' +
+        '<span class="ldtxt">กำลังโหลด...<span class="en">Loading…</span></span>' +
+      '</div>';
+    return;
+  }
+  if (entry.status === 'error') {
+    // Offer the Drive fallback only on the centre page; a failed side tile
+    // just shows a quiet placeholder and retries on a later navigation.
+    let th = '⚠️ ยังไม่มีรูปหน้านี้';
+    let en = 'This page isn\'t ready yet';
+    if (tier === 0) {
+      th += '<br><a href="' + DRIVE_URL + '" target="_blank">เปิดใน Google Drive แทน ⤴</a>';
+      en += ' — <a href="' + DRIVE_URL + '" target="_blank">open it in Drive instead</a>';
+    }
+    node.innerHTML = '<div class="stack-loading err"><span class="ldtxt">' + th + '<span class="en">' + en + '</span></span></div>';
+    return;
+  }
+  const img = document.createElement('img');
+  img.className = 'stack-img';
+  img.src = entry.url;
+  img.alt = 'หน้า ' + printedLabelForRaw(num);
+  node.innerHTML = '';
+  node.appendChild(img);
+  if (tier === 0) {
+    img.id = 'pageImage';
+    const onReady = function () { applyViewTransform(); };
+    img.addEventListener('load', onReady);
+    if (img.complete) onReady();
+  }
+}
+
+function refreshStackNode(num) {
+  const node = stackNodes.get(num);
+  if (!node) return; // no longer in the visible ±2 window
+  fillStackNodeContent(node, num, tierOf(num));
+}
+
+function makeStackNode(num, tier) {
+  const node = document.createElement('div');
+  node.className = 'stack-page';
+  node.dataset.page = num;
+  applyTierStyle(node, tier);
+  return node;
+}
+
+// Rebuilds all 5 stack slots around currentPage, keeping/reusing
+// existing DOM nodes for pages that are still in the window (so their
+// tier CSS transition animates the slide+fade rather than popping), and
+// removing nodes that fell outside it once their fade-out finishes.
+function renderStack() {
+  const stack = document.getElementById('pageStack');
+  if (!stack) return;
+
+  const wanted = new Set();
+  STACK_TIERS.forEach(function (tier) {
+    const num = currentPage + tier;
+    if (MIN_PAGE != null && num < MIN_PAGE) return;
+    if (MAX_PAGE != null && num > MAX_PAGE) return;
+    wanted.add(num);
+
+    let node = stackNodes.get(num);
+    if (!node) {
+      node = makeStackNode(num, tier);
+      stackNodes.set(num, node);
+      stack.appendChild(node);
+    } else {
+      applyTierStyle(node, tier);
+    }
+    fillStackNodeContent(node, num, tier);
+  });
+
+  // Preload in priority waves: centre, then both near tiers together, then
+  // both far tiers. Keeps centre > near > far while starting each wave's
+  // two sides at the same moment, so neither side visibly lags.
+  const preloadWaves = [[0], [-1, 1], [-2, 2]];
+  let preloadChain = Promise.resolve();
+  preloadWaves.forEach(function (tiers) {
+    const nums = tiers.map(function (t) { return currentPage + t; }).filter(function (n) { return wanted.has(n); });
+    preloadChain = preloadChain.then(function () {
+      return Promise.all(nums.map(ensureStackPageLoaded));
+    });
+  });
+
+  // Anything left over belongs to a page that fell outside the ±2
+  // window — fade it out and drop it once the transition finishes.
+  stackNodes.forEach(function (node, num) {
+    if (wanted.has(num)) return;
+    stackNodes.delete(num);
+    node.style.opacity = '0';
+    node.style.pointerEvents = 'none';
+    setTimeout(function () {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, 450);
+  });
+}
+
+// Promotes/demotes the whole stack to a new centre page (image-mode prev/next).
+function goToStackPage(num) {
+  if (MIN_PAGE != null && num < MIN_PAGE) return;
+  if (MAX_PAGE != null && num > MAX_PAGE) return;
+  currentPage = num;
+  resetViewTransform();
+  renderStack();
+  applyViewTransform();
+  refreshQrLinks(num);
+  refreshPageModels(num);
+
+  const label = printedLabelForRaw(num);
+  updateTitle(label);
+  const totalPrinted = (MAX_PAGE != null) ? Math.max(MAX_PAGE - 2, 0) : null;
+  document.getElementById('pageIndicator').textContent =
+    label + (totalPrinted != null && num > 2 ? (' / ' + totalPrinted) : '');
+  document.getElementById('prevBtn').disabled = (MIN_PAGE != null) ? (num <= MIN_PAGE) : (num <= 1);
+  document.getElementById('nextBtn').disabled = (MAX_PAGE != null) ? (num >= MAX_PAGE) : false;
+}
+
+// Initial paint — seeds the cache with the page the server already
+// resolved (no round-trip needed for the very first page shown), then
+// renders the stack, which immediately kicks off the neighbor preloads.
+function initStack(num, url) {
+  currentPage = num;
+  // Hide the server-rendered "fetching..." placeholder; the stack owns the stage.
+  const statusEl = document.getElementById('status');
+  if (statusEl) statusEl.style.display = 'none';
+  stackCache.set(num, { status: 'ready', url: url });
+  renderStack();
+  applyViewTransform();
+
+  const label = printedLabelForRaw(num);
+  updateTitle(label);
+  const totalPrinted = (MAX_PAGE != null) ? Math.max(MAX_PAGE - 2, 0) : null;
+  document.getElementById('pageIndicator').textContent =
+    label + (totalPrinted != null && num > 2 ? (' / ' + totalPrinted) : '');
+  document.getElementById('prevBtn').disabled = (MIN_PAGE != null) ? (num <= MIN_PAGE) : (num <= 1);
+  document.getElementById('nextBtn').disabled = (MAX_PAGE != null) ? (num >= MAX_PAGE) : false;
+  document.getElementById('prevBtn').style.display = 'inline-flex';
+  document.getElementById('nextBtn').style.display = 'inline-flex';
+}
+
+// ---------------------------------------------------------------------
+// PDF.js fallback path, used when no pre-rendered image exists yet.
+// ---------------------------------------------------------------------
+
+function renderPdfPage(num) {
+  refreshPageModels(num);
+  pdfDoc.getPage(num).then(function (page) {
+    const baseViewport = page.getViewport({ scale: 1 });
+    const stage = document.getElementById('stage');
+    const availWidth = stage.clientWidth - 32;
+    const cssScale = Math.max(0.5, Math.min(2.2, availWidth / baseViewport.width));
+    // Render at device pixel ratio so it's sharp on 2x/3x phone screens.
+    const dpr = window.devicePixelRatio || 1;
+    const renderViewport = page.getViewport({ scale: cssScale * dpr });
+    const cssViewport = page.getViewport({ scale: cssScale });
+
+    stage.innerHTML = '<div class="page-flip-wrap flip-enter" id="pageFlipWrap"><canvas id="pdfCanvas"></canvas></div>';
+    const canvas = document.getElementById('pdfCanvas');
+    canvas.width = renderViewport.width;
+    canvas.height = renderViewport.height;
+    canvas.style.width = cssViewport.width + 'px';
+    canvas.style.height = cssViewport.height + 'px';
+    const ctx = canvas.getContext('2d');
+    page.render({ canvasContext: ctx, viewport: renderViewport });
+    settlePageFlip();
+
+    currentPage = num;
+    const label = printedLabelForRaw(num);
+    updateTitle(label);
+    const totalPrinted = Math.max(pdfDoc.numPages - 2, 0);
+    document.getElementById('pageIndicator').textContent = label + (num > 2 ? (' / ' + totalPrinted) : '');
+    document.getElementById('prevBtn').disabled = (num <= 1);
+    document.getElementById('nextBtn').disabled = (num >= pdfDoc.numPages);
+    document.getElementById('prevBtn').style.display = 'inline-flex';
+    document.getElementById('nextBtn').style.display = 'inline-flex';
+    refreshQrLinks(num);
+    resetViewTransform();
+    applyViewTransform();
+  });
+}
+
+function loadPdfFallback() {
+  if (!window.pdfjsLib) {
+    showStatus(
+      '⚠️ โหลดตัวแสดง PDF ไม่สำเร็จ<br>' +
+      '<a href="' + DRIVE_URL + '" target="_blank">เปิดใน Google Drive แทน ⤴</a>' +
+      '<span class="en">The PDF viewer couldn\'t load — <a href="' + DRIVE_URL + '" target="_blank">open it in Drive instead</a>.</span>'
+    );
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(function (b64) {
+      if (!b64) {
+        showStatus(
+          '⚠️ โหลดไฟล์ PDF ไม่สำเร็จ หรือไฟล์มีขนาดใหญ่เกินไป<br>' +
+          '<a href="' + DRIVE_URL + '" target="_blank">เปิดใน Google Drive แทน ⤴</a>' +
+          '<span class="en">Couldn\'t load the PDF (or it\'s too large) — <a href="' + DRIVE_URL + '" target="_blank">open it in Drive instead</a>.</span>'
+        );
+        return;
+      }
+      try {
+        const bytes = b64ToUint8(b64);
+        pdfjsLib.getDocument({ data: bytes }).promise.then(function (doc) {
+          pdfDoc = doc;
+          renderPdfPage(Math.min(Math.max(1, TARGET_PAGE), doc.numPages));
+        }).catch(function () {
+          showStatus(
+            '⚠️ เปิดไฟล์ PDF ไม่สำเร็จ<br>' +
+            '<a href="' + DRIVE_URL + '" target="_blank">เปิดใน Google Drive แทน ⤴</a>' +
+            '<span class="en">Couldn\'t open the PDF — <a href="' + DRIVE_URL + '" target="_blank">try Drive instead</a>.</span>'
+          );
+        });
+      } catch (e) {
+        showStatus('⚠️ เกิดข้อผิดพลาด<span class="en">Something went wrong.</span>');
+      }
+    })
+    .withFailureHandler(function () {
+      showStatus(
+        '⚠️ โหลด PDF ไม่สำเร็จ<br>' +
+        '<a href="' + DRIVE_URL + '" target="_blank">เปิดใน Google Drive แทน ⤴</a>' +
+        '<span class="en">Load failed — <a href="' + DRIVE_URL + '" target="_blank">try Drive instead</a>.</span>'
+      );
+    })
+    .getPdfBase64(FILE_ID);
+}
+
+// ---------------------------------------------------------------------
+// Prev/Next + Rotate/Zoom controls.
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Mobile/tablet compact layout: below the breakpoint the button clusters
+// and QR links collapse into a ☰ drawer so the page image gets the height.
+// Desktop is unaffected.
+//
+// The REAL elements are moved (never cloned: duplicate ids would break
+// getElementById) into #mobileMenuPanel, then restored to their recorded
+// parent + next sibling on leaving compact mode. Moving keeps listeners.
+// ---------------------------------------------------------------------
+// Must match the CSS compact media query exactly.
+const COMPACT_MEDIA_QUERY = '(max-width:900px), (max-width:1024px) and (max-height:500px)';
+let _isCompactLayout = null; // null = not yet applied once
+const _originalSlots = []; // [{ el, parent, nextSibling }], only populated while compact
+let _homeBtnSlot = null; // { el, parent, nextSibling } for #homeBtn specifically — see below
+
+function _isCompactNow() {
+  return !!(window.matchMedia && window.matchMedia(COMPACT_MEDIA_QUERY).matches);
+}
+
+function applyResponsiveLayout() {
+  const compact = _isCompactNow();
+  if (compact === _isCompactLayout) return; // no change since last check — nothing to do
+  _isCompactLayout = compact;
+
+  const topbar = document.querySelector('.topbar');
+  const panel = document.getElementById('mobileMenuPanel');
+  const topbarLeft = document.getElementById('topbarLeft');
+  const topbarRight = document.getElementById('topbarRight');
+  const zoneLeft = document.getElementById('linkZoneLeft');
+  const zoneRight = document.getElementById('linkZoneRight');
+  const homeBtn = document.getElementById('homeBtn');
+  // Desktop reading order, so the drawer reads the same way. #homeBtn is
+  // handled separately: it stays in the topbar, not the drawer.
+  const movable = [topbarLeft, zoneLeft, zoneRight, topbarRight].filter(Boolean);
+  if (!panel || !movable.length) return;
+
+  if (compact) {
+    // #homeBtn moves to .topbar itself (after .mid), the compact grid's
+    // right column. Tracked separately because it restores into #topbarLeft.
+    if (topbar && homeBtn) {
+      _homeBtnSlot = { el: homeBtn, parent: homeBtn.parentNode, nextSibling: homeBtn.nextSibling };
+      topbar.appendChild(homeBtn);
+    }
+    _originalSlots.length = 0;
+    movable.forEach(function (el) {
+      _originalSlots.push({ el: el, parent: el.parentNode, nextSibling: el.nextSibling });
+      panel.appendChild(el);
+    });
+  } else {
+    // insertBefore with a null nextSibling behaves like appendChild, so
+    // an element that was originally the LAST child of its parent (e.g.
+    // linkZoneRight, last inside .mid) restores to the right spot too.
+    _originalSlots.forEach(function (slot) {
+      slot.parent.insertBefore(slot.el, slot.nextSibling);
+    });
+    _originalSlots.length = 0;
+    if (_homeBtnSlot) {
+      _homeBtnSlot.parent.insertBefore(_homeBtnSlot.el, _homeBtnSlot.nextSibling);
+      _homeBtnSlot = null;
+    }
+    closeMobileMenu();
+  }
+}
+
+function openMobileMenu() {
+  const panel = document.getElementById('mobileMenuPanel');
+  const toggle = document.getElementById('menuToggleBtn');
+  if (!panel) return;
+  panel.classList.add('open');
+  // body.menu-open reveals #homeBtn's full label. It's on <body> because
+  // #homeBtn is in .topbar, a sibling of the panel, not inside it.
+  document.body.classList.add('menu-open');
+  if (toggle) toggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeMobileMenu() {
+  const panel = document.getElementById('mobileMenuPanel');
+  const toggle = document.getElementById('menuToggleBtn');
+  if (!panel) return;
+  panel.classList.remove('open');
+  document.body.classList.remove('menu-open');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function toggleMobileMenu() {
+  const panel = document.getElementById('mobileMenuPanel');
+  if (!panel) return;
+  if (panel.classList.contains('open')) closeMobileMenu();
+  else openMobileMenu();
+}
+
+document.getElementById('prevBtn').onclick = function () {
+  if (imageMode) { goToStackPage(currentPage - 1); }
+  else if (pdfDoc && currentPage > 1) { flipOutCurrentPage(); renderPdfPage(currentPage - 1); }
+};
+document.getElementById('nextBtn').onclick = function () {
+  if (imageMode) { goToStackPage(currentPage + 1); }
+  else if (pdfDoc && currentPage < pdfDoc.numPages) { flipOutCurrentPage(); renderPdfPage(currentPage + 1); }
+};
+
+// Arrow keys = prev/next via .click(), so disabled buttons at the ends are
+// no-ops. Ignored while typing in inputs or contenteditable elements.
+document.addEventListener('keydown', function (e) {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') {
+    document.getElementById('prevBtn').click();
+  } else if (e.key === 'ArrowRight') {
+    document.getElementById('nextBtn').click();
+  }
+});
+
+document.getElementById('rotateBtn').onclick = function () {
+  rotation = (rotation + 90) % 360;
+  applyViewTransform();
+};
+document.getElementById('zoomBtn').onclick = function () {
+  zoomIndex = (zoomIndex + 1) % ZOOM_LEVELS.length;
+  applyViewTransform();
+};
+document.getElementById('printBtn').onclick = function () {
+  window.print();
+};
+
+// ---- Dark/light theme toggle ----
+// Same 'bjTheme' localStorage key as index.html (same web app origin), so
+// the choice carries over. try/catch: some privacy modes block storage.
+const VIEWER_THEME_KEY = 'bjTheme';
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+function applyViewerTheme(theme) {
+  const icon = themeToggleBtn.querySelector('.theme-icon');
+  const lbl = themeToggleBtn.querySelector('.ttlabel');
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    if (icon) icon.textContent = '☀️';
+    if (lbl) lbl.innerHTML = 'โหมดสว่าง<span class="en">Light Theme</span>';
+    themeToggleBtn.title = 'สลับเป็นโหมดสว่าง / Switch to light mode';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    if (icon) icon.textContent = '🌙';
+    if (lbl) lbl.innerHTML = 'โหมดมืด<span class="en">Dark Theme</span>';
+    themeToggleBtn.title = 'สลับเป็นโหมดมืด / Switch to dark mode';
+  }
+}
+
+(function initViewerTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(VIEWER_THEME_KEY); } catch (e) { /* storage blocked — the default below still applies, it just won't persist */ }
+  // Dark is the default; only a stored 'light' opts out (matches index.html).
+  // The <head> script already set the attribute; this syncs the button.
+  applyViewerTheme(saved === 'light' ? 'light' : 'dark');
+})();
+
+themeToggleBtn.onclick = function () {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  applyViewerTheme(next);
+  try { localStorage.setItem(VIEWER_THEME_KEY, next); } catch (e) { /* won't persist across reloads, toggle still works this session */ }
+};
+
+// ---- Chinese zodiac accent layer ----
+// Exact copy of index.html's logic (the pages share no JS file); keep the
+// two in sync. data-element selects the whole interface accent (see the
+// palette at the top of the stylesheet).
+const ZODIAC_ANIMALS_TH = ['หนู','วัว','เสือ','กระต่าย','มังกร','งู','ม้า','แพะ','ลิง','ไก่','หมา','หมู'];
+const ZODIAC_ANIMALS_EN = ['Rat','Ox','Tiger','Rabbit','Dragon','Snake','Horse','Goat','Monkey','Rooster','Dog','Pig'];
+const ZODIAC_ANIMALS_ICON = ['🐀','🐂','🐅','🐇','🐉','🐍','🐎','🐐','🐒','🐓','🐕','🐖'];
+const ZODIAC_ELEMENTS = [
+  { key:'wood',  th:'ไม้',  en:'Wood',  light:'#2e8b3d', dark:'#39ff14' },
+  { key:'wood',  th:'ไม้',  en:'Wood',  light:'#2e8b3d', dark:'#39ff14' },
+  { key:'fire',  th:'ไฟ',   en:'Fire',  light:'#d1451c', dark:'#ff4d1a' },
+  { key:'fire',  th:'ไฟ',   en:'Fire',  light:'#d1451c', dark:'#ff4d1a' },
+  { key:'earth', th:'ดิน',  en:'Earth', light:'#b8860b', dark:'#ffcc33' },
+  { key:'earth', th:'ดิน',  en:'Earth', light:'#b8860b', dark:'#ffcc33' },
+  { key:'metal', th:'โลหะ', en:'Metal', light:'#5b6b7a', dark:'#b8d4e3' },
+  { key:'metal', th:'โลหะ', en:'Metal', light:'#5b6b7a', dark:'#b8d4e3' },
+  { key:'water', th:'น้ำ',  en:'Water', light:'#1565c0', dark:'#00aaff' },
+  { key:'water', th:'น้ำ',  en:'Water', light:'#1565c0', dark:'#00aaff' }
+];
+
+function getZodiacInfo(year) {
+  const y = year || new Date().getFullYear();
+  const animalIndex = ((y - 4) % 12 + 12) % 12;
+  const elementIndex = ((y - 4) % 10 + 10) % 10;
+  const el = ZODIAC_ELEMENTS[elementIndex];
+  return {
+    year: y,
+    icon: ZODIAC_ANIMALS_ICON[animalIndex],
+    animalTh: ZODIAC_ANIMALS_TH[animalIndex],
+    animalEn: ZODIAC_ANIMALS_EN[animalIndex],
+    elementKey: el.key,
+    elementTh: el.th,
+    elementEn: el.en,
+    accentLight: el.light,
+    accentDark: el.dark
+  };
+}
+
+function applyZodiacAccent() {
+  try {
+    const z = getZodiacInfo();
+    // data-element is the whole per-year theming hook (see the stylesheet's
+    // html[data-element] blocks). Don't write --zodiac-* vars inline here:
+    // inline styles beat the stylesheet and the chips would drift from the
+    // rest of the accent.
+    document.documentElement.setAttribute('data-element', z.elementKey);
+    const badge = document.getElementById('zodiacBadge');
+    if (badge) {
+      badge.innerHTML = `<span>${z.icon}</span>`
+        + `<span class="lbl-sm">ปี${z.animalTh}${z.elementTh}<span class="en">${z.elementEn} ${z.animalEn} ${z.year}</span></span>`;
+      badge.title = `${z.elementEn} ${z.animalEn} year (${z.year}) — self-adapting Chinese zodiac accent, changes automatically each year`;
+    }
+    // Date/time bubble, separate from the badge above.
+    const clockBadge = document.getElementById('zodiacClockBadge');
+    if (clockBadge) {
+      clockBadge.innerHTML = `<span class="zb-date" id="zodiacDate"></span><span class="zb-time" id="zodiacTime"></span>`;
+    }
+  } catch (err) {
+    // purely cosmetic — never let this block the rest of the page
+  }
+}
+applyZodiacAccent();
+
+// Live date/time (dd/mm/yyyy, 24-hour HH:MM:SS) from the visitor's local
+// clock, same as index.html.
+function updateZodiacClock() {
+  try {
+    const dateEl = document.getElementById('zodiacDate');
+    const timeEl = document.getElementById('zodiacTime');
+    if (!dateEl || !timeEl) return;
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    dateEl.textContent = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    timeEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  } catch (err) {
+    // purely cosmetic — never let this block the rest of the page
+  }
+}
+updateZodiacClock();
+setInterval(updateZodiacClock, 1000);
+
+document.getElementById('helpBtn').onclick = function () {
+  showGuideOverlay();
+};
+document.getElementById('guideOverlay').onclick = function () {
+  hideGuideOverlay();
+};
+
+document.getElementById('menuToggleBtn').onclick = function (e) {
+  e.stopPropagation(); // don't let this bubble into the "tap outside closes" listener below
+  toggleMobileMenu();
+};
+
+// Auto-close the drawer after a tap inside it so the result is visible
+// (bubble phase: each button's own onclick has already run). Exceptions:
+// Rotate/Zoom, which people tap repeatedly; and How to Use, which would
+// otherwise snap the drawer shut just before the overlay appears.
+document.getElementById('mobileMenuPanel').addEventListener('click', function (e) {
+  const target = e.target.closest('a, button');
+  if (!target) return;
+  if (target.id === 'helpBtn' || target.id === 'rotateBtn' || target.id === 'zoomBtn') return;
+  closeMobileMenu();
+});
+
+// Tapping the page image while the drawer is open closes it.
+document.getElementById('stage').addEventListener('click', function () {
+  if (document.getElementById('mobileMenuPanel').classList.contains('open')) closeMobileMenu();
+});
+
+let _layoutResizeTimer = null;
+window.addEventListener('resize', function () {
+  clearTimeout(_layoutResizeTimer);
+  _layoutResizeTimer = setTimeout(applyResponsiveLayout, 120);
+});
+
+applyResponsiveLayout(); // establish the correct layout once before the first render
+
+distributeLinkButtons(INITIAL_QR_LINKS);
+initPageModels();
+
+if (imageMode) {
+  initStack(TARGET_PAGE, INITIAL_IMAGE_URL);
+} else {
+  loadPdfFallback();
+}
+</script>
+<script src="bj-viewer-boot.js?v=v2026.11.13-0815"></script>
+</body>
+</html>

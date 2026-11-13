@@ -1,0 +1,16 @@
+{
+ ".nojekyll": "e3b0c44298fc1c14",
+ "README.md": "252aa5f6ccf70395",
+ "bj-app.js": "39ef107dcb8ef02d",
+ "bj-viewer-boot.js": "a35673551ee93a00",
+ "icons/icon-180.png": "0c3804652778b326",
+ "icons/icon-192.png": "4aec6e69a54c14bc",
+ "icons/icon-32.png": "cbeb5bb6a45b479c",
+ "icons/icon-512.png": "cfd723cabb0155b0",
+ "icons/maskable-192.png": "4c6b5586755edc3c",
+ "icons/maskable-512.png": "a7d4cb125e69ee04",
+ "index.html": "f8ad72c0bce3e5a4",
+ "manifest.webmanifest": "556a102394849a01",
+ "sw.js": "5bdd2dcf10329bfb",
+ "view.html": "91d1c86d068e31b0"
+}
