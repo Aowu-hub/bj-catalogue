@@ -2,7 +2,7 @@
 // Keeps the shell (page, icons, manifest) on the phone so the app opens and can show the offline card
 // without internet. It never touches the catalogue itself (script.google.com): that always comes live.
 // Change APP_VERSION on every publish (vYYYY.MM.DD-HHMM, never reused) so phones pick up the new shell.
-const APP_VERSION = 'v2026.11.13-0715';
+const APP_VERSION = 'v2026.11.13-0720';
 const CACHE = 'bj-shell-' + APP_VERSION;
 const SHELL = ['./', 'index.html', 'manifest.webmanifest',
   'icons/icon-32.png', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
@@ -21,13 +21,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return; // live catalogue: untouched
-  if (req.mode === 'navigate') {
-    // Page: network first (gets updates), cached copy when offline.
-    e.respondWith(fetch(req).then(res => {
-      const copy = res.clone(); caches.open(CACHE).then(c => c.put('index.html', copy)); return res;
-    }).catch(() => caches.match('index.html')));
-    return;
-  }
-  // Icons / manifest: cache first.
-  e.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req)));
+  // Network first for everything of the shell (page, manifest, icons) so updates arrive at once;
+  // the stored copy is only used when there is no internet.
+  const key = req.mode === 'navigate' ? 'index.html' : req;
+  e.respondWith(fetch(req).then(res => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(key, copy)); }
+    return res;
+  }).catch(() => caches.match(key, { ignoreSearch: true })));
 });
