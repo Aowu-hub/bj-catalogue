@@ -2,7 +2,7 @@
   "name": "BJ ค้นหาสินค้า — BJ Catalogue",
   "short_name": "BJ Catalogue",
   "description": "ค้นหารหัสสินค้าหรือชื่อสินค้าในแคตตาล็อค BJ / Search the BJ catalogue by model code or product name",
-  "id": "./",
+  "id": "/bj-catalogue/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

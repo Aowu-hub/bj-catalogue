@@ -2,7 +2,7 @@
 // Keeps the shell (page, icons, manifest) on the phone so the app opens and can show the offline card
 // without internet. It never touches the catalogue itself (script.google.com): that always comes live.
 // Change APP_VERSION on every publish (vYYYY.MM.DD-HHMM, never reused) so phones pick up the new shell.
-const APP_VERSION = 'v2026.11.13-0705';
+const APP_VERSION = 'v2026.11.13-0715';
 const CACHE = 'bj-shell-' + APP_VERSION;
 const SHELL = ['./', 'index.html', 'manifest.webmanifest',
   'icons/icon-32.png', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
