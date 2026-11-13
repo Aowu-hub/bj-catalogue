@@ -9,6 +9,25 @@
   ['file', 'page', 'printedPage', 'section', 'term'].forEach(function (k) { if (params.has(k)) q[k] = params.get(k); });
   var inApp = params.get('inapp') === '1' && window.parent !== window;
 
+  // Loading cover while the page data comes from the data door (can take a few seconds).
+  var cover = document.createElement('div');
+  cover.id = 'bjLoading';
+  cover.setAttribute('aria-live', 'polite');
+  cover.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;' +
+    'background:#04070c;color:#f3eded;font:15px/1.5 system-ui,sans-serif;text-align:center;z-index:2147483500;transition:opacity .25s';
+  cover.innerHTML = '<style>@keyframes bjspin{to{transform:rotate(360deg)}}</style>' +
+    '<div style="width:34px;height:34px;border:3px solid rgba(255,255,255,.18);border-top-color:#e53935;border-radius:50%;animation:bjspin .9s linear infinite"></div>' +
+    '<div style="font-weight:700">กำลังเปิดหน้าแคตตาล็อก…</div><div style="opacity:.7;font-size:13px">Opening the catalogue page…</div>';
+  if (inApp) {
+    var back0 = document.createElement('button');
+    back0.type = 'button'; back0.textContent = '✕ กลับ / Back';
+    back0.style.cssText = 'margin-top:8px;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:8px 16px;background:transparent;color:#f3eded;cursor:pointer';
+    back0.onclick = function () { window.parent.postMessage({ bj: 'close-viewer' }, location.origin); };
+    cover.appendChild(back0);
+  }
+  (document.body || document.documentElement).appendChild(cover);
+  function uncover() { cover.style.opacity = '0'; setTimeout(function () { cover.remove(); }, 300); }
+
   function fill(v) {
     var re = /%%(\w+)%%/g;
     var val = function (m, k) { return v[k] == null ? '' : String(v[k]); };
@@ -86,5 +105,6 @@
     fill(v);
     homeButton();
     runViewer();
-  }, failed);
+    uncover();
+  }, function (err) { cover.remove(); failed(err); });
 })();

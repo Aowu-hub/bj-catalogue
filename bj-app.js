@@ -8,7 +8,7 @@
 (function () {
   'use strict';
   var EXEC = 'https://script.google.com/macros/s/AKfycbwxwu1-tkaSeVO5RzF_r6Gij5CSeTzdgTIYZvG3woD9O3cdMmCHdkobK4qbhe-Pl-o/exec';          // filled by the builder (public web-app link)
-  var VERSION = 'v2026.11.13-0815';
+  var VERSION = 'v2026.11.13-0821';
   var IS_VIEWER = /\/view\.html$/.test(location.pathname);
   window.BJ_APP_VERSION = VERSION;
   window.BJ_EXEC = EXEC;
